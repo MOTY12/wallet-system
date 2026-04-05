@@ -1,0 +1,588 @@
+# Wallet System - Production-Grade Microservice Architecture
+
+A scalable, production-ready microservice-based wallet system built with NestJS, gRPC, Prisma ORM, and PostgreSQL. Designed for high reliability, maintainability, and extensibility.
+
+## 🏗️ Architecture Overview
+
+This project demonstrates **clean microservice architecture** with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Wallet System (Monorepo)                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  packages/                                                   │
+│    ├── proto/              Shared gRPC proto definitions     │
+│    └── prisma/             Database schema & migrations      │
+│                                                               │
+│  apps/                                                        │
+│    ├── user-service/       User management microservice      │
+│    │   └── gRPC: localhost:50051                            │
+│    │                                                         │
+│    └── wallet-service/     Wallet management microservice    │
+│        └── gRPC: localhost:50052                            │
+│        └── Calls User Service for validation               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Decisions
+
+1. **Monorepo with Yarn Workspaces**
+   - Single repository for all services and shared packages
+   - Simplified dependency management across services
+   - Easier refactoring and code reuse
+
+2. **gRPC for Inter-Service Communication**
+   - Type-safe proto contracts
+   - High-performance binary protocol
+   - Natural fit for microservice patterns
+   - Versioned API design (v1)
+
+3. **Shared Prisma Package**
+   - Single source of truth for database schema
+   - Consistent migrations across services
+   - Shared ORM client, separate database instances support
+
+4. **One Wallet Per User**
+   - Enforced at database level with unique constraint
+   - Simplifies business logic and prevents duplicates
+
+5. **Balance in Cents as BigInt**
+   - Avoids floating-point precision issues
+   - BigInt ensures accuracy for large amounts
+   - Production-safe approach for financial data
+
+6. **Transactional Debit Operations**
+   - Prisma transactions ensure atomicity
+   - Prevents race conditions and insufficient balance scenarios
+   - Critical for financial accuracy
+
+7. **Structured Logging with Pino**
+   - Production-grade JSON logging
+   - Pretty printing in development
+   - Easy integration with log aggregation tools (ELK, Datadog, etc.)
+
+8. **Input Validation with class-validator**
+   - Declarative validation rules
+   - Consistent error responses
+   - Prevents invalid data from reaching business logic
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** 20+ (use Volta for version management)
+- **Docker** with Docker Compose (for PostgreSQL)
+- **Yarn** 4.0+
+
+### 1. Clone and Install
+
+```bash
+cd wallet-system
+yarn install
+```
+
+### 2. Start PostgreSQL
+
+Create a `docker-compose.yml` in the root:
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: wallet_system_dev
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+Start the database:
+
+```bash
+docker-compose up -d
+```
+
+### 3. Setup Database
+
+```bash
+# Copy .env from example
+cp packages/prisma/.env.example packages/prisma/.env
+
+# Run migrations
+yarn workspace @wallet-system/prisma migrate:dev
+```
+
+### 4. Start Services (in separate terminals)
+
+**Terminal 1: User Service**
+```bash
+cd apps/user-service
+cp .env.example .env
+yarn dev
+```
+
+Expected output:
+```
+User Service running on gRPC localhost:50051
+```
+
+**Terminal 2: Wallet Service**
+```bash
+cd apps/wallet-service
+cp .env.example .env
+yarn dev
+```
+
+Expected output:
+```
+Wallet Service running on gRPC localhost:50052
+```
+
+---
+
+## 📡 API Usage
+
+### Option 1: Using Evans CLI (Recommended for gRPC)
+
+Install Evans:
+```bash
+# macOS
+brew install evans
+
+# Linux
+curl -L https://github.com/ktr0731/evans/releases/download/v0.15.1/evans_linux_amd64.tar.gz | tar -zx && mv evans /usr/local/bin/
+```
+
+#### Create User
+
+```bash
+evans -r -p 50051 -p 50052
+
+# In Evans REPL:
+call user.v1.UserService.CreateUser
+# Enter: 
+# {
+#   "email": "alice@example.com",
+#   "name": "Alice Smith"
+# }
+```
+
+Example response:
+```json
+{
+  "id": "clvxyz123...",
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "created_at": 1704067200000
+}
+```
+
+#### Create Wallet
+
+```bash
+call wallet.v1.WalletService.CreateWallet
+# Enter:
+# {
+#   "user_id": "clvxyz123...",
+#   "initial_balance": 50000
+# }
+```
+
+---
+
+### Option 2: Using grpcurl
+
+Install grpcurl:
+```bash
+# macOS
+brew install grpcurl
+
+# Linux
+go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+```
+
+#### Create User
+
+```bash
+grpcurl -plaintext \
+  -d '{"email": "bob@example.com", "name": "Bob Johnson"}' \
+  localhost:50051 user.v1.UserService.CreateUser
+```
+
+#### Get User
+
+```bash
+grpcurl -plaintext \
+  -d '{"user_id": "USER_ID_HERE"}' \
+  localhost:50051 user.v1.UserService.GetUserById
+```
+
+#### Create Wallet
+
+```bash
+grpcurl -plaintext \
+  -d '{"user_id": "USER_ID_HERE", "initial_balance": 100000}' \
+  localhost:50052 wallet.v1.WalletService.CreateWallet
+```
+
+#### Credit Wallet
+
+```bash
+grpcurl -plaintext \
+  -d '{"wallet_id": "WALLET_ID_HERE", "amount": 25000, "reason": "deposit"}' \
+  localhost:50052 wallet.v1.WalletService.CreditWallet
+```
+
+#### Debit Wallet
+
+```bash
+grpcurl -plaintext \
+  -d '{"wallet_id": "WALLET_ID_HERE", "amount": 10000, "reason": "purchase"}' \
+  localhost:50052 wallet.v1.WalletService.DebitWallet
+```
+
+#### Get Wallet
+
+```bash
+grpcurl -plaintext \
+  -d '{"wallet_id": "WALLET_ID_HERE"}' \
+  localhost:50052 wallet.v1.WalletService.GetWallet
+```
+
+---
+
+### Option 3: Postman Collection
+
+Create a file `wallet-system.postman_collection.json`:
+
+```json
+{
+  "info": {
+    "name": "Wallet System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "url": "grpc://localhost:50051/user.v1.UserService/CreateUser",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alice@example.com\",\n  \"name\": \"Alice Smith\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 🗄️ Database Schema
+
+### User Table
+
+```sql
+CREATE TABLE User (
+  id        VARCHAR(255) PRIMARY KEY,
+  email     VARCHAR(255) UNIQUE NOT NULL,
+  name      VARCHAR(255) NOT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX(email)
+);
+```
+
+### Wallet Table
+
+```sql
+CREATE TABLE Wallet (
+  id        VARCHAR(255) PRIMARY KEY,
+  userId    VARCHAR(255) UNIQUE NOT NULL,
+  balance   BIGINT DEFAULT 0,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX(userId),
+  FOREIGN KEY(userId) REFERENCES User(id) ON DELETE CASCADE
+);
+```
+
+---
+
+## 📋 Project Structure
+
+```
+wallet-system/
+├── apps/
+│   ├── user-service/
+│   │   ├── src/
+│   │   │   ├── main.ts                 Entry point
+│   │   │   ├── app.module.ts           Root NestJS module
+│   │   │   ├── user/
+│   │   │   │   ├── user.module.ts      Feature module
+│   │   │   │   ├── user.service.ts     Business logic
+│   │   │   │   ├── user.controller.ts  gRPC handlers
+│   │   │   │   └── dto/
+│   │   │   │       └── user.dto.ts     Data transfer objects
+│   │   │   └── prisma/
+│   │   │       └── prisma.service.ts   Database client
+│   │   ├── tsconfig.json
+│   │   ├── package.json
+│   │   └── .env.example
+│   │
+│   └── wallet-service/
+│       ├── src/
+│       │   ├── main.ts
+│       │   ├── app.module.ts
+│       │   ├── wallet/
+│       │   │   ├── wallet.module.ts
+│       │   │   ├── wallet.service.ts   (with transactions)
+│       │   │   ├── wallet.controller.ts
+│       │   │   └── dto/
+│       │   │       └── wallet.dto.ts
+│       │   ├── user-service/
+│       │   │   └── user-service.client.ts  gRPC client
+│       │   └── prisma/
+│       │       └── prisma.service.ts
+│       ├── tsconfig.json
+│       ├── package.json
+│       └── .env.example
+│
+├── packages/
+│   ├── proto/
+│   │   ├── proto/
+│   │   │   ├── user/v1/user.proto
+│   │   │   └── wallet/v1/wallet.proto
+│   │   └── package.json
+│   │
+│   └── prisma/
+│       ├── prisma/
+│       │   ├── schema.prisma
+│       │   └── migrations/
+│       ├── package.json
+│       └── .env.example
+│
+├── package.json             Monorepo root
+└── docker-compose.yml
+```
+
+---
+
+## 🔑 Key Features
+
+### User Service (`user-service`)
+
+- ✅ **CreateUser** - Create new users with email validation
+  - Validates email format and uniqueness
+  - Auto-generates IDs using CUID
+  
+- ✅ **GetUserById** - Retrieve user information
+  - Returns full user details including creation timestamp
+
+### Wallet Service (`wallet-service`)
+
+- ✅ **CreateWallet** - Create wallet for an existing user
+  - Verifies user exists via gRPC call to User Service
+  - Enforces one wallet per user (unique constraint)
+  - Supports optional initial balance
+  
+- ✅ **GetWallet** - Retrieve wallet details
+  - Returns wallet ID, balance, user ID, creation time
+  
+- ✅ **CreditWallet** - Add funds to wallet
+  - Records reason for audit trail (optional)
+  - Simple update operation
+  
+- ✅ **DebitWallet** - Withdraw funds from wallet
+  - Uses **Prisma transactions** for atomicity
+  - Prevents negative balances with validation
+  - Records reason for audit trail (optional)
+  - Handles race conditions safely
+
+---
+
+## 🛡️ Error Handling
+
+All services use consistent error responses:
+
+| Error | Code | When |
+|-------|------|------|
+| `User not found` | NOT_FOUND | User doesn't exist in User Service |
+| `Wallet not found` | NOT_FOUND | Wallet doesn't exist |
+| `Wallet already exists for this user` | INVALID_ARGUMENT | Attempting to create second wallet |
+| `User with this email already exists` | INVALID_ARGUMENT | Email not unique |
+| `Insufficient balance` | INVALID_ARGUMENT | Debit amount exceeds balance |
+| `Failed to debit wallet` | INVALID_ARGUMENT | Transaction failure |
+
+---
+
+## 📝 Logging
+
+All major operations are logged with structured logging:
+
+```json
+{
+  "level": "info",
+  "time": "2024-04-04T10:30:45.123Z",
+  "msg": "Crediting wallet clvxyz123 with amount: 25000 (reason: deposit)",
+  "service": "WalletService"
+}
+```
+
+Logs include:
+- Service operations (create, credit, debit)
+- Validation errors
+- Inter-service communication
+- Balance changes with amounts
+
+---
+
+## 🧪 Testing Workflow
+
+### 1. Create a User
+```bash
+grpcurl -plaintext -d '{"email":"test@example.com","name":"Test User"}' localhost:50051 user.v1.UserService.CreateUser
+```
+Save the `id` from response → `USER_ID`
+
+### 2. Create a Wallet
+```bash
+grpcurl -plaintext -d '{"user_id":"USER_ID","initial_balance":100000}' localhost:50052 wallet.v1.WalletService.CreateWallet
+```
+Save the `id` from response → `WALLET_ID`
+
+### 3. Credit Wallet
+```bash
+grpcurl -plaintext -d '{"wallet_id":"WALLET_ID","amount":50000,"reason":"bonus"}' localhost:50052 wallet.v1.WalletService.CreditWallet
+```
+Expected balance: $1,500.00 (100000 + 50000 cents)
+
+### 4. Debit Wallet
+```bash
+grpcurl -plaintext -d '{"wallet_id":"WALLET_ID","amount":30000,"reason":"purchase"}' localhost:50052 wallet.v1.WalletService.DebitWallet
+```
+Expected balance: $1,200.00 (150000 - 30000 cents)
+
+### 5. Get Wallet
+```bash
+grpcurl -plaintext -d '{"wallet_id":"WALLET_ID"}' localhost:50052 wallet.v1.WalletService.GetWallet
+```
+
+---
+
+## 🔄 Inter-Service Communication
+
+The **Wallet Service** depends on the **User Service**:
+
+```
+CreateWallet Request
+    ↓
+Wallet Service validates input
+    ↓
+Calls User Service via gRPC
+    {"user_id": "clvxyz123"}
+    ↓
+User Service responds with User object
+    ↓
+If user exists: Create wallet
+If user not found: Throw NotFoundException
+    ↓
+Response to client
+```
+
+This ensures **data consistency**: wallets can only be created for existing users.
+
+---
+
+## 🚀 Production Considerations
+
+### Before deploying to production:
+
+1. **Environment Variables**
+   - Use secure secret management (AWS Secrets Manager, HashiCorp Vault)
+   - Never commit `.env` files
+
+2. **Logging & Monitoring**
+   - Integrate with ELK stack or Datadog for centralized logging
+   - Set up alerts for error rates and transaction failures
+   - Monitor gRPC latency between services
+
+3. **Database**
+   - Use read replicas for scaled read operations
+   - Enable automated backups
+   - Consider connection pooling (PgBouncer)
+   - Implement query monitoring
+
+4. **Service Deployment**
+   - Container orchestration with Kubernetes or Docker Swarm
+   - Health checks and graceful shutdown
+   - Circuit breakers for inter-service calls
+   - Service mesh (Istio) for observability
+
+5. **Security**
+   - Enable gRPC TLS/SSL encryption
+   - Implement authentication (mTLS between services)
+   - Rate limiting on API endpoints
+   - Input validation and sanitization
+
+6. **Testing**
+   - Add unit tests for services
+   - Integration tests for gRPC endpoints
+   - End-to-end transaction testing
+   - Load testing for wallet operations
+
+---
+
+## 📚 SOLID Principles Applied
+
+- **S (Single Responsibility)**: Each service handles one domain (Users or Wallets)
+- **O (Open/Closed)**: Proto contracts allow extensibility without modification
+- **L (Liskov Substitution)**: Services implement consistent gRPC interfaces
+- **I (Interface Segregation)**: Proto files define minimal, focused contracts
+- **D (Dependency Inversion)**: Services depend on abstractions (gRPC), not concrete implementations
+
+---
+
+## 🤝 Contributing
+
+When adding new features:
+
+1. **Update Proto Files** - Define new RPC methods in `packages/proto`
+2. **Update Prisma Schema** - Modify `packages/prisma/schema.prisma` if needed
+3. **Implement Service Logic** - Add business logic in service classes
+4. **Add Controllers** - Implement gRPC handlers in controllers
+5. **Add Validation** - Create DTOs with class-validator rules
+6. **Add Logging** - Log important operations and errors
+
+---
+
+## 📄 License
+
+MIT
+
+---
+
+## 🎯 Next Steps
+
+- Implement authentication & authorization
+- Add audit logging for financial transactions
+- Implement transaction history/ledger
+- Add rate limiting
+- Implement wallet limits and restrictions
+- Add integration tests
+- Set up CI/CD pipeline

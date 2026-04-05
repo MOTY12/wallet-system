@@ -1,0 +1,19 @@
+{
+  "name": "@wallet-system/prisma",
+  "version": "1.0.0",
+  "description": "Shared Prisma schema and migrations",
+  "private": true,
+  "scripts": {
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "generate": "prisma generate",
+    "seed": "node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.8.0",
+    "ts-node": "^10.9.0"
+  }
+}

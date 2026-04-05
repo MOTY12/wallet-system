@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package user.v1;
+
+// Common empty message
+message Empty {}
+
+// User message
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  int64 created_at = 4; // Unix timestamp in milliseconds
+}
+
+// Create user request
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+}
+
+// Get user request
+message GetUserByIdRequest {
+  string user_id = 1;
+}
+
+// User service definition
+service UserService {
+  rpc CreateUser (CreateUserRequest) returns (User);
+  rpc GetUserById (GetUserByIdRequest) returns (User);
+}

@@ -1,0 +1,17 @@
+node_modules
+dist
+build
+*.lock
+*.tgz
+coverage
+.next
+.nuxt
+.cache
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.vscode-test
+.yarn/cache
+.yarn/unplugged

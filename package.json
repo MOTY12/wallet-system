@@ -1,0 +1,25 @@
+{
+  "name": "wallet-system",
+  "version": "1.0.0",
+  "description": "Production-grade microservice-based wallet system built with NestJS and gRPC",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "yarn install && yarn workspace @wallet-system/prisma prisma migrate dev",
+    "dev": "yarn workspaces foreach -A run dev",
+    "build": "yarn workspaces foreach run build",
+    "test": "yarn workspaces foreach run test",
+    "lint": "yarn workspaces foreach run lint"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0"
+  },
+  "volta": {
+    "node": "20.9.0",
+    "yarn": "4.0.1"
+  },
+  "packageManager": "yarn@4.13.0"
+}

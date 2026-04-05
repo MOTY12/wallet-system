@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package wallet.v1;
+
+// Wallet message
+message Wallet {
+  string id = 1;
+  string user_id = 2;
+  int64 balance = 3; // Balance in cents (to avoid float precision issues)
+  int64 created_at = 4; // Unix timestamp in milliseconds
+}
+
+// Create wallet request - requires valid user_id
+message CreateWalletRequest {
+  string user_id = 1;
+  int64 initial_balance = 2; // Optional: initialize with balance, defaults to 0
+}
+
+// Get wallet request
+message GetWalletRequest {
+  string wallet_id = 1;
+}
+
+// Credit wallet request
+message CreditWalletRequest {
+  string wallet_id = 1;
+  int64 amount = 2; // Amount in cents
+  string reason = 3; // Optional: reason for credit (e.g., "deposit", "refund")
+}
+
+// Debit wallet request
+message DebitWalletRequest {
+  string wallet_id = 1;
+  int64 amount = 2; // Amount in cents
+  string reason = 3; // Optional: reason for debit (e.g., "purchase", "withdrawal")
+}
+
+// Wallet service definition
+service WalletService {
+  rpc CreateWallet (CreateWalletRequest) returns (Wallet);
+  rpc GetWallet (GetWalletRequest) returns (Wallet);
+  rpc CreditWallet (CreditWalletRequest) returns (Wallet);
+  rpc DebitWallet (DebitWalletRequest) returns (Wallet);
+}

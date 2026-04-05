@@ -1,0 +1,10 @@
+{
+  "name": "@wallet-system/proto",
+  "version": "1.0.0",
+  "description": "Shared gRPC proto definitions",
+  "main": "index.ts",
+  "files": [
+    "proto",
+    "generated"
+  ]
+}
