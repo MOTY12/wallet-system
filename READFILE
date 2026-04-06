@@ -76,8 +76,34 @@ cd wallet-system
 yarn install
 ```
 
+### 2. Start PostgreSQL
 
-### 2. Setup Database
+Create a `docker-compose.yml` in the root:
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: wallet_system_dev
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+Start the database:
+
+```bash
+docker-compose up -d
+```
+
+### 3. Setup Database
 
 ```bash
 # Copy .env from example
@@ -87,7 +113,7 @@ cp packages/prisma/.env.example packages/prisma/.env
 yarn workspace @wallet-system/prisma migrate:dev
 ```
 
-### 3. Start Services (in separate terminals)
+### 4. Start Services (in separate terminals)
 
 **Terminal 1: User Service**
 ```bash
@@ -125,7 +151,7 @@ Install Evans:
 brew install evans
 
 # Linux
-curl -L https://github.com/ktr0731/evans/releases/download/v0.10.11/evans_darwin_amd64.tar.gz | tar -zx && mv evans /usr/local/bin/
+curl -L https://github.com/ktr0731/evans/releases/download/v0.15.1/evans_linux_amd64.tar.gz | tar -zx && mv evans /usr/local/bin/
 ```
 
 #### Create User
